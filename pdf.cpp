@@ -10,6 +10,14 @@ void write_pdf_header(std::ofstream& pdf) {
     pdf << "%PDF-1.4\n";
 }
 
+// Read and copy PDF content
+void copy_pdf_content(std::ifstream& input, std::ofstream& output) {
+    std::string line;
+    while (std::getline(input, line)) {
+        output << line << "\n";
+    }
+}
+
 // Merge PDFs
 void merge_pdfs(const std::vector<std::string>& pdf_files, const std::string& output_file) {
     std::ofstream output(output_file, std::ios::binary);
@@ -20,24 +28,28 @@ void merge_pdfs(const std::vector<std::string>& pdf_files, const std::string& ou
 
     write_pdf_header(output);
     output << "1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n";
-    output << "2 0 obj\n<< /Type /Pages /Kids [";
+    output << "2 0 obj\n<< /Type /Pages /Kids ["; 
 
     size_t total_pages = 0;
+    std::vector<size_t> page_counts; // To track the number of pages in each PDF
+
     for (const auto& pdf_file : pdf_files) {
         std::ifstream input(pdf_file, std::ios::binary);
         if (!input) {
             std::cerr << "Could not open file: " << pdf_file << std::endl;
             continue;
         }
+
+        // Read and copy content from each PDF
+        copy_pdf_content(input, output);
         
-        std::string line;
-        while (std::getline(input, line)) {
-            output << line << "\n"; // Add PDF content
-        }
-        total_pages++;
+        // Increment the total pages for the output PDF
+        total_pages++; // Assuming each PDF file has 1 page for simplicity
+        page_counts.push_back(1); // Update page counts for simplicity
         input.close();
     }
 
+    // Close the Pages object
     output << "] /Count " << total_pages << " >>\nendobj\n";
 
     // Add XREF and trailer sections
@@ -45,7 +57,7 @@ void merge_pdfs(const std::vector<std::string>& pdf_files, const std::string& ou
     for (size_t i = 0; i < total_pages + 3; ++i) {
         output << "0000000000 65535 f \n"; // Placeholder
     }
-    
+
     output << "trailer\n<< /Size " << (total_pages + 3) << " /Root 1 0 R >>\n";
     output << "%%EOF\n";
 
@@ -82,25 +94,43 @@ std::vector<std::string> select_files(const char* filter) {
 
 // Convert image files to PDF
 void image_to_pdf(const std::string& image_file, const std::string& output_pdf) {
+    std::ifstream img(image_file, std::ios::binary);
+    if (!img) {
+        std::cerr << "Could not open image file: " << image_file << std::endl;
+        return;
+    }
+
     std::ofstream pdf(output_pdf, std::ios::binary);
     write_pdf_header(pdf);
+    
+    // PDF structure
     pdf << "1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n";
     pdf << "2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n";
-    pdf << "3 0 obj\n<< /Type /Page /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << >> >>\nendobj\n";
     
-    pdf << "4 0 obj\n<< /Length 5 0 R >>\nstream\n";
+    // Page object
+    pdf << "3 0 obj\n<< /Type /Page /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /XObject << /img1 5 0 R >> >> >>\nendobj\n";
+    
+    // Content stream
+    img.seekg(0, std::ios::end);
+    std::streampos img_size = img.tellg();
+    img.seekg(0, std::ios::beg);
+    
+    pdf << "4 0 obj\n<< /Length " << static_cast<int>(img_size) + 28 << " >>\nstream\n"; // Adjust length
+    pdf << "BT /F1 24 Tf 72 720 Td (Image here) Tj ET\n";  // Placeholder text
+    pdf << "endstream\nendobj\n";
 
-    // Insert the image file (this section is just a placeholder)
-    std::ifstream img(image_file, std::ios::binary);
-    if (img) {
-        pdf << img.rdbuf(); // Add image file raw data
-        img.close();
-    }
-    
+    // Image object
+    pdf << "5 0 obj\n<< /Type /XObject /Subtype /Image /Width 612 /Height 792 /BitsPerComponent 8 /ColorSpace /DeviceRGB /Filter /DCTDecode /Length " << img_size << " >>\nstream\n";
+    pdf << img.rdbuf(); // Write image data
     pdf << "\nendstream\nendobj\n";
-    pdf << "5 0 obj\nendobj\n";
-    pdf << "xref\n0 6\n0000000000 65535 f \n0000000009 00000 n \n0000000054 00000 n \n";
-    pdf << "0000000100 00000 n \n0000000154 00000 n \n0000000210 00000 n \n";
+
+    pdf << "xref\n0 6\n";
+    pdf << "0000000000 65535 f \n";
+    pdf << "0000000009 00000 n \n";
+    pdf << "0000000054 00000 n \n";
+    pdf << "0000000100 00000 n \n";
+    pdf << "0000000154 00000 n \n";
+    pdf << "0000000210 00000 n \n";
     pdf << "trailer\n<< /Size 6 /Root 1 0 R >>\n";
     pdf << "%%EOF\n";
 
