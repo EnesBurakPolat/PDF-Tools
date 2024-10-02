@@ -5,6 +5,8 @@
 #include <windows.h>
 #include <commdlg.h>
 
+//g++ pdf.cpp -o pdf_console.exe -lcomdlg32 -static -static-libgcc -static-libstdc++ -std=c++11
+
 // PDF Header
 void write_pdf_header(std::ofstream& pdf) {
     pdf << "%PDF-1.4\n";
